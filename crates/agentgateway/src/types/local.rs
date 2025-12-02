@@ -998,6 +998,18 @@ struct MergedMcpBackend {
 	backends: Vec<BackendWithPolicies>,
 }
 
+/// Merges multiple MCP backend blocks from the same route into a single MCP backend.
+/// This enables tools from all MCP backend groups to be returned to clients.
+///
+/// # Limitations
+/// - All targets will use the stateful_mode from the first MCP backend block.
+///   Supporting different stateful modes per group would require architectural changes
+///   to create separate McpBackendGroup instances and merge tools at the relay layer.
+/// - Policies from all groups are merged together and applied to all targets.
+///
+/// # Arguments
+/// * `key` - The backend key (route identifier)
+/// * `mcp_backends` - All MCP backend blocks from the route's backends array
 fn merge_mcp_backends(
 	key: Strng,
 	mcp_backends: Vec<LocalRouteBackend>,
@@ -1013,7 +1025,8 @@ fn merge_mcp_backends(
 	let mut merged_policies = Vec::new();
 	
 	// Track stateful mode - use the first one we encounter
-	// In the future, we could support per-group stateful modes
+	// NOTE: All targets will share this stateful mode. Supporting per-group
+	// stateful modes requires architectural changes beyond this PR's scope.
 	let mut stateful_mode = None;
 	let mut always_use_prefix = false;
 
@@ -1172,7 +1185,7 @@ async fn convert_route(
 			.transpose()?
 			.unwrap_or_default();
 		let bref = match &b.backend {
-			LocalBackend::Service { name, port } => BackendReference::Service {
+			LocalBackend::Service { name, port} => BackendReference::Service {
 				name: name.clone(),
 				port: *port,
 			},
