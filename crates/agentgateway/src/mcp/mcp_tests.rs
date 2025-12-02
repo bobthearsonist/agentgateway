@@ -521,3 +521,84 @@ mod mockserver {
 		}
 	}
 }
+
+#[tokio::test]
+async fn test_merge_multiple_mcp_backends() {
+	// This test verifies that multiple MCP backend blocks in the same route
+	// are merged together, and all tools from all backends are returned.
+	use crate::client::Client;
+	use crate::types::local::NormalizedLocalConfig;
+
+	agent_core::telemetry::testing::setup_test_logging();
+	
+	let mock1 = mock_streamable_http_server(true).await;
+	let mock2 = mock_streamable_http_server(true).await;
+
+	// Create a config with multiple MCP backend blocks in the same route
+	let config = format!(
+		r#"
+binds:
+- port: 8080
+  listeners:
+  - routes:
+    - backends:
+      # First MCP backend group
+      - mcp:
+          stateful_mode: stateful
+          targets:
+          - name: group1
+            mcp:
+              host: http://127.0.0.1:{}
+              port: {}
+              path: /mcp
+      # Second MCP backend group
+      - mcp:
+          stateful_mode: stateful
+          targets:
+          - name: group2
+            mcp:
+              host: http://127.0.0.1:{}
+              port: {}
+              path: /mcp
+"#,
+		mock1.addr.ip(),
+		mock1.addr.port(),
+		mock2.addr.ip(),
+		mock2.addr.port()
+	);
+
+	// Parse and convert the config
+	let client = Client::new_http2(Default::default());
+	let normalized = NormalizedLocalConfig::from(client, strng::new("gateway"), &config)
+		.await
+		.unwrap();
+
+	// Verify that we have a single merged backend
+	assert_eq!(normalized.backends.len(), 1, "Should have exactly one merged MCP backend");
+	
+	// Check that the backend is an MCP backend with all targets
+	if let crate::types::agent::Backend::MCP(_, mcp_backend) = &normalized.backends[0].backend {
+		assert_eq!(
+			mcp_backend.targets.len(),
+			2,
+			"Merged backend should have 2 targets (one from each group)"
+		);
+		
+		// Verify target names
+		let target_names: Vec<_> = mcp_backend
+			.targets
+			.iter()
+			.map(|t| t.name.as_str())
+			.collect();
+		assert!(
+			target_names.contains(&"group1"),
+			"Should contain target from first group"
+		);
+		assert!(
+			target_names.contains(&"group2"),
+			"Should contain target from second group"
+		);
+	} else {
+		panic!("Expected MCP backend, got {:?}", normalized.backends[0].backend);
+	}
+}
