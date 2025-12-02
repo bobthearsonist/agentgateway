@@ -1105,6 +1105,28 @@ impl StoreUpdater {
 			next_state.binds.insert(b.key.clone());
 			s.insert_bind(b);
 		}
+		
+		// Check for multiple MCP backends with the same name
+		let mut mcp_backend_names = HashMap::new();
+		for b in backends.iter() {
+			if let Backend::MCP(_, _) = &b.backend {
+				let name = b.backend.name();
+				*mcp_backend_names.entry(name).or_insert(0) += 1;
+			}
+		}
+		
+		for (name, count) in mcp_backend_names.iter() {
+			if *count > 1 {
+				tracing::warn!(
+					backend_name = %name,
+					count = count,
+					"Multiple `mcp` backend blocks detected with the same name. Only the last block will be used. \
+					Consider consolidating all MCP targets into a single backend block. \
+					See: https://agentgateway.dev/docs/mcp/connect/multiplex/"
+				);
+			}
+		}
+		
 		for b in backends {
 			old_backends.remove(&b.backend.name());
 			next_state.backends.insert(b.backend.name());
