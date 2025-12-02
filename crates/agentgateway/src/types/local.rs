@@ -993,6 +993,142 @@ async fn convert_listener(
 	Ok((l, all_policies, all_backends))
 }
 
+struct MergedMcpBackend {
+	backend_ref: RouteBackendReference,
+	backends: Vec<BackendWithPolicies>,
+}
+
+fn merge_mcp_backends(
+	key: Strng,
+	mcp_backends: Vec<LocalRouteBackend>,
+) -> anyhow::Result<MergedMcpBackend> {
+	if mcp_backends.is_empty() {
+		anyhow::bail!("no MCP backends to merge");
+	}
+
+	// Collect all targets and supporting backends from all MCP backend groups
+	let mut all_targets = Vec::new();
+	let mut all_backends = Vec::new();
+	let mut total_weight = 0;
+	let mut merged_policies = Vec::new();
+	
+	// Track stateful mode - use the first one we encounter
+	// In the future, we could support per-group stateful modes
+	let mut stateful_mode = None;
+	let mut always_use_prefix = false;
+
+	for (group_idx, backend) in mcp_backends.into_iter().enumerate() {
+		total_weight += backend.weight;
+		
+		// Merge policies from all groups
+		if let Some(policies) = backend.policies {
+			let translated = policies.translate()?;
+			merged_policies.extend(translated);
+		}
+
+		let LocalBackend::MCP(mcp) = backend.backend else {
+			continue;
+		};
+
+		// Set stateful mode from first group
+		if stateful_mode.is_none() {
+			stateful_mode = Some(mcp.stateful_mode.clone());
+		}
+		
+		// Use prefix if any group requires it
+		if mcp.prefix_mode.as_ref().is_some_and(|pm| matches!(pm, McpPrefixMode::Always)) {
+			always_use_prefix = true;
+		}
+
+		// Process each target in this group
+		for (target_idx, t) in mcp.targets.iter().enumerate() {
+			let name = strng::format!("mcp/{}/{}/{}", key.clone(), group_idx, target_idx);
+			let mut make_backend = |b: Backend, tls: bool| {
+				let bb = BackendWithPolicies {
+					backend: b,
+					inline_policies: if tls {
+						vec![BackendPolicy::BackendTLS(
+							LocalBackendTLS::default().try_into().ok()?,
+						)]
+					} else {
+						vec![]
+					},
+				};
+				all_backends.push(bb);
+				Ok::<_, anyhow::Error>(())
+			};
+
+			let spec = match t.spec.clone() {
+				LocalMcpTargetSpec::Sse { backend } => {
+					let (backend, path, tls) = backend.process()?;
+					let (bref, be) = to_simple_backend_and_ref(name.clone(), &backend);
+					if let Some(b) = be {
+						make_backend(b, tls)?;
+					}
+					McpTargetSpec::Sse(SseTargetSpec {
+						backend: bref,
+						path: path.clone(),
+					})
+				},
+				LocalMcpTargetSpec::Mcp { backend } => {
+					let (backend, path, tls) = backend.process()?;
+					let (bref, be) = to_simple_backend_and_ref(name.clone(), &backend);
+					if let Some(b) = be {
+						make_backend(b, tls)?;
+					}
+					McpTargetSpec::Mcp(StreamableHTTPTargetSpec {
+						backend: bref,
+						path: path.clone(),
+					})
+				},
+				LocalMcpTargetSpec::Stdio { cmd, args, env } => McpTargetSpec::Stdio { cmd, args, env },
+				LocalMcpTargetSpec::OpenAPI { backend, schema } => {
+					let (backend, _, tls) = backend.process()?;
+					let (bref, be) = to_simple_backend_and_ref(name.clone(), &backend);
+					if let Some(b) = be {
+						make_backend(b, tls)?;
+					}
+					McpTargetSpec::OpenAPI(OpenAPITarget {
+						backend: bref,
+						schema,
+					})
+				},
+			};
+
+			let target = McpTarget {
+				name: t.name.clone(),
+				spec,
+			};
+			all_targets.push(Arc::new(target));
+		}
+	}
+
+	let stateful = match stateful_mode.unwrap_or(McpStatefulMode::Stateful) {
+		McpStatefulMode::Stateless => false,
+		McpStatefulMode::Stateful => true,
+	};
+
+	let merged_backend = McpBackend {
+		targets: all_targets,
+		stateful,
+		always_use_prefix,
+	};
+
+	// Create a single backend entry for all merged MCP backends
+	all_backends.push(Backend::MCP(key.clone(), merged_backend).into());
+
+	let backend_ref = RouteBackendReference {
+		weight: total_weight,
+		backend: BackendReference::Backend(key),
+		inline_policies: merged_policies,
+	};
+
+	Ok(MergedMcpBackend {
+		backend_ref,
+		backends: all_backends,
+	})
+}
+
 async fn convert_route(
 	client: client::Client,
 	lr: LocalRoute,
@@ -1013,9 +1149,22 @@ async fn convert_route(
 	let key = strng::format!("{}/{}/{}", listener_key, route_name, rule_name,);
 	let rule_name = strng::format!("{route_name}/{rule_name}");
 
+	// Separate MCP backends from others to enable merging
+	let mut mcp_backends = Vec::new();
+	let mut other_backends = Vec::new();
+	for b in backends {
+		if matches!(b.backend, LocalBackend::MCP(_)) {
+			mcp_backends.push(b);
+		} else {
+			other_backends.push(b);
+		}
+	}
+
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
-	for b in backends {
+	
+	// Process non-MCP backends normally
+	for b in other_backends {
 		let policies = b
 			.policies
 			.clone()
@@ -1038,6 +1187,13 @@ async fn convert_route(
 		};
 		backend_refs.push(bref);
 		external_backends.extend_from_slice(&backends);
+	}
+	
+	// Merge all MCP backends into a single backend
+	if !mcp_backends.is_empty() {
+		let merged_mcp = merge_mcp_backends(key.clone(), mcp_backends)?;
+		backend_refs.push(merged_mcp.backend_ref);
+		external_backends.extend_from_slice(&merged_mcp.backends);
 	}
 	let resolved = if let Some(pol) = policies {
 		split_policies(client, pol).await?
