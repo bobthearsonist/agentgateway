@@ -1185,7 +1185,7 @@ async fn convert_route(
 			.transpose()?
 			.unwrap_or_default();
 		let bref = match &b.backend {
-			LocalBackend::Service { name, port} => BackendReference::Service {
+			LocalBackend::Service { name, port } => BackendReference::Service {
 				name: name.clone(),
 				port: *port,
 			},
