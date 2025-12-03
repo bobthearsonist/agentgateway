@@ -1107,7 +1107,7 @@ impl StoreUpdater {
 			next_state.binds.insert(b.key.clone());
 			s.insert_bind(b);
 		}
-		
+
 		// Check for multiple MCP backends with the same name
 		let mut mcp_backend_names: HashMap<BackendName, usize> = HashMap::new();
 		for b in backends.iter() {
@@ -1126,7 +1126,7 @@ impl StoreUpdater {
 				}
 			}
 		}
-		
+
 		for b in backends {
 			old_backends.remove(&b.backend.name());
 			next_state.backends.insert(b.backend.name());
