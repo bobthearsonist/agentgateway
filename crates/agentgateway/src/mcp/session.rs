@@ -230,38 +230,22 @@ impl Session {
 							.await
 					},
 					ClientRequest::ListResourcesRequest(_) => {
-						if !self.relay.is_multiplexing() {
-							log.non_atomic_mutate(|l| {
-								l.resource = Some(MCPOperation::Resource);
-							});
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resources(cel.clone()))
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						log.non_atomic_mutate(|l| {
+							l.resource = Some(MCPOperation::Resource);
+						});
+						self
+							.relay
+							.send_fanout(r, ctx, self.relay.merge_resources(cel.clone()))
+							.await
 					},
 					ClientRequest::ListResourceTemplatesRequest(_) => {
-						if !self.relay.is_multiplexing() {
-							log.non_atomic_mutate(|l| {
-								l.resource = Some(MCPOperation::ResourceTemplates);
-							});
-							self
-								.relay
-								.send_fanout(r, ctx, self.relay.merge_resource_templates(cel.clone()))
-								.await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
-						}
+						log.non_atomic_mutate(|l| {
+							l.resource = Some(MCPOperation::ResourceTemplates);
+						});
+						self
+							.relay
+							.send_fanout(r, ctx, self.relay.merge_resource_templates(cel.clone()))
+							.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
 						let name = ctr.params.name.clone();
@@ -306,34 +290,58 @@ impl Session {
 						self.relay.send_single(r, ctx, service_name).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
-						if let Some(service_name) = self.relay.default_target_name() {
-							let uri = rrr.params.uri.clone();
-							log.non_atomic_mutate(|l| {
-								l.target_name = Some(service_name.to_string());
-								l.resource_name = Some(uri.to_string());
-								l.resource = Some(MCPOperation::Resource);
-							});
-							if !self.relay.policies.validate(
-								&rbac::ResourceType::Resource(rbac::ResourceId::new(
-									service_name.to_string(),
-									uri.to_string(),
-								)),
-								cel.as_ref(),
-							) {
-								return Err(UpstreamError::Authorization);
-							}
-							self.relay.send_single_without_multiplexing(r, ctx).await
-						} else {
-							// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-							// Find a mapping of URL
-							Err(UpstreamError::InvalidMethodWithMultiplexing(
-								r.request.method().to_string(),
-							))
+						let uri = rrr.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(original_uri.to_string());
+							l.resource = Some(MCPOperation::Resource);
+						});
+						if !self.relay.policies.validate(
+							&rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								original_uri.to_string(),
+							)),
+							cel.as_ref(),
+						) {
+							return Err(UpstreamError::Authorization);
 						}
+						// Replace the URI with the original (non-namespaced) version
+						rrr.params.uri = original_uri.to_string();
+						self.relay.send_single(r, ctx, service_name).await
 					},
-					ClientRequest::SubscribeRequest(_) | ClientRequest::UnsubscribeRequest(_) => {
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
+					ClientRequest::SubscribeRequest(sr) => {
+						let uri = sr.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(original_uri.to_string());
+							l.resource = Some(MCPOperation::Resource);
+						});
+						if !self.relay.policies.validate(
+							&rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								original_uri.to_string(),
+							)),
+							cel.as_ref(),
+						) {
+							return Err(UpstreamError::Authorization);
+						}
+						// Replace the URI with the original (non-namespaced) version
+						sr.params.uri = original_uri.to_string();
+						self.relay.send_single(r, ctx, service_name).await
+					},
+					ClientRequest::UnsubscribeRequest(ur) => {
+						let uri = ur.params.uri.clone();
+						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						log.non_atomic_mutate(|l| {
+							l.target_name = Some(service_name.to_string());
+							l.resource_name = Some(original_uri.to_string());
+							l.resource = Some(MCPOperation::Resource);
+						});
+						// Replace the URI with the original (non-namespaced) version
+						ur.params.uri = original_uri.to_string();
+						self.relay.send_single(r, ctx, service_name).await
 					},
 					ClientRequest::CompleteRequest(_) => {
 						// For now, we don't have a sane mapping of incoming requests to a specific
