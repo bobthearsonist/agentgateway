@@ -526,11 +526,10 @@ mod mockserver {
 async fn test_merge_multiple_mcp_backends() {
 	// This test verifies that multiple MCP backend blocks in the same route
 	// are merged together, and all tools from all backends are returned.
-	use crate::client::Client;
 	use crate::types::local::NormalizedLocalConfig;
 
 	agent_core::telemetry::testing::setup_test_logging();
-	
+
 	let mock1 = mock_streamable_http_server(true).await;
 	let mock2 = mock_streamable_http_server(true).await;
 
@@ -544,7 +543,7 @@ binds:
     - backends:
       # First MCP backend group
       - mcp:
-          stateful_mode: stateful
+          statefulMode: stateful
           targets:
           - name: group1
             mcp:
@@ -553,7 +552,7 @@ binds:
               path: /mcp
       # Second MCP backend group
       - mcp:
-          stateful_mode: stateful
+          statefulMode: stateful
           targets:
           - name: group2
             mcp:
@@ -568,24 +567,37 @@ binds:
 	);
 
 	// Parse and convert the config
-	let client = Client::new_http2(Default::default());
+	let client = crate::client::Client::new(
+		&crate::client::Config {
+			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+		},
+		None,
+		crate::BackendConfig::default(),
+		None,
+	);
 	let normalized = NormalizedLocalConfig::from(client, strng::new("gateway"), &config)
 		.await
 		.unwrap();
 
-	// Verify that we have a single merged backend
-	assert_eq!(normalized.backends.len(), 1, "Should have exactly one merged MCP backend");
-	
+	// We expect multiple backends: the merged MCP backend plus supporting backends for connections
+	// Find the MCP backend
+	let mcp_backend = normalized
+		.backends
+		.iter()
+		.find(|b| matches!(b.backend, crate::types::agent::Backend::MCP(_, _)))
+		.expect("Should have an MCP backend");
+
 	// Check that the backend is an MCP backend with all targets
-	if let crate::types::agent::Backend::MCP(_, mcp_backend) = &normalized.backends[0].backend {
+	if let crate::types::agent::Backend::MCP(_, backend) = &mcp_backend.backend {
 		assert_eq!(
-			mcp_backend.targets.len(),
+			backend.targets.len(),
 			2,
 			"Merged backend should have 2 targets (one from each group)"
 		);
-		
+
 		// Verify target names
-		let target_names: Vec<_> = mcp_backend
+		let target_names: Vec<_> = backend
 			.targets
 			.iter()
 			.map(|t| t.name.as_str())
@@ -599,6 +611,9 @@ binds:
 			"Should contain target from second group"
 		);
 	} else {
-		panic!("Expected MCP backend, got {:?}", normalized.backends[0].backend);
+		panic!(
+			"Expected MCP backend, got {:?}",
+			mcp_backend.backend
+		);
 	}
 }

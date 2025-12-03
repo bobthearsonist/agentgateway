@@ -1023,7 +1023,7 @@ fn merge_mcp_backends(
 	let mut all_backends = Vec::new();
 	let mut total_weight = 0;
 	let mut merged_policies = Vec::new();
-	
+
 	// Track stateful mode - use the first one we encounter
 	// NOTE: All targets will share this stateful mode. Supporting per-group
 	// stateful modes requires architectural changes beyond this PR's scope.
@@ -1032,7 +1032,7 @@ fn merge_mcp_backends(
 
 	for (group_idx, backend) in mcp_backends.into_iter().enumerate() {
 		total_weight += backend.weight;
-		
+
 		// Merge policies from all groups
 		if let Some(policies) = backend.policies {
 			let translated = policies.translate()?;
@@ -1047,9 +1047,13 @@ fn merge_mcp_backends(
 		if stateful_mode.is_none() {
 			stateful_mode = Some(mcp.stateful_mode.clone());
 		}
-		
+
 		// Use prefix if any group requires it
-		if mcp.prefix_mode.as_ref().is_some_and(|pm| matches!(pm, McpPrefixMode::Always)) {
+		if mcp
+			.prefix_mode
+			.as_ref()
+			.is_some_and(|pm| matches!(pm, McpPrefixMode::Always))
+		{
 			always_use_prefix = true;
 		}
 
@@ -1061,7 +1065,7 @@ fn merge_mcp_backends(
 					backend: b,
 					inline_policies: if tls {
 						vec![BackendPolicy::BackendTLS(
-							LocalBackendTLS::default().try_into().ok()?,
+							LocalBackendTLS::default().try_into()?,
 						)]
 					} else {
 						vec![]
@@ -1175,7 +1179,7 @@ async fn convert_route(
 
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
-	
+
 	// Process non-MCP backends normally
 	for b in other_backends {
 		let policies = b
@@ -1201,7 +1205,7 @@ async fn convert_route(
 		backend_refs.push(bref);
 		external_backends.extend_from_slice(&backends);
 	}
-	
+
 	// Merge all MCP backends into a single backend
 	if !mcp_backends.is_empty() {
 		let merged_mcp = merge_mcp_backends(key.clone(), mcp_backends)?;
