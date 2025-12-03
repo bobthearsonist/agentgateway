@@ -55,9 +55,15 @@ fn parse_namespaced_uri(uri: &str) -> Result<(&str, &str), String> {
 	if let Some(pos) = uri.find("://") {
 		let target = &uri[..pos];
 		let original_uri = &uri[pos + 3..];
+		// Validate that target name is non-empty
+		if target.is_empty() {
+			return Err(format!("Invalid namespaced URI format (empty target): {}", uri));
+		}
+		// Validate that original URI exists (can be empty but the part after :// must be present)
+		// This allows for URIs like "target://" which become ""
 		Ok((target, original_uri))
 	} else {
-		Err(format!("Invalid namespaced URI format: {}", uri))
+		Err(format!("Invalid namespaced URI format (missing '://'): {}", uri))
 	}
 }
 
