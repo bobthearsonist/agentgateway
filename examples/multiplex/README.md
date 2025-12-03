@@ -30,3 +30,45 @@ Because we have multiple tools, each tool is prefixed with the `<name>_` to avoi
 
 ![Tools List](./img/list.png)
 
+### Multiple MCP Backend Groups
+
+You can also define multiple MCP backend blocks in the same route's `backends` array. This is useful when you need different configurations for different groups of MCP servers.
+
+**Example use cases:**
+- Different authentication tokens per group
+- Different timeout/retry policies per group
+- Mixing stateful and stateless servers (note: currently all targets use the first group's stateful mode)
+
+```yaml
+backends:
+  # First MCP backend group
+  - mcp:
+      stateful_mode: stateful
+      targets:
+      - name: internal-tools
+        stdio:
+          cmd: npx
+          args: ["@example/internal-tools"]
+    policies:
+      auth:
+        type: bearer
+        token: $INTERNAL_TOKEN
+  # Second MCP backend group
+  - mcp:
+      stateful_mode: stateful
+      targets:
+      - name: external-tools
+        stdio:
+          cmd: npx
+          args: ["@example/external-tools"]
+    policies:
+      auth:
+        type: bearer
+        token: $EXTERNAL_TOKEN
+```
+
+When multiple MCP backends are configured at the same route level:
+- All tools from all groups are merged and returned to clients
+- Each backend group can have its own inline policies
+- Target names must be unique across all groups to avoid collisions
+
