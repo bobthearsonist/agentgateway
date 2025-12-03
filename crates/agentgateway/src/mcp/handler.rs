@@ -39,6 +39,34 @@ fn resource_name(default_target_name: Option<&String>, target: &str, name: &str)
 	}
 }
 
+/// Namespace a URI with a target name for multiplexing mode
+/// Format: target://original-uri
+fn namespace_uri(default_target_name: Option<&String>, target: &str, uri: &str) -> String {
+	if default_target_name.is_none() {
+		format!("{target}://{uri}")
+	} else {
+		uri.to_string()
+	}
+}
+
+/// Parse a namespaced URI to extract the target name and original URI
+/// Expects format: target://original-uri
+fn parse_namespaced_uri(uri: &str) -> Result<(&str, &str), String> {
+	if let Some(pos) = uri.find("://") {
+		let target = &uri[..pos];
+		let original_uri = &uri[pos + 3..];
+		// Validate that target name is non-empty
+		if target.is_empty() {
+			return Err(format!("Invalid namespaced URI format (empty target): {}", uri));
+		}
+		// Validate that original URI exists (can be empty but the part after :// must be present)
+		// This allows for URIs like "target://" which become ""
+		Ok((target, original_uri))
+	} else {
+		Err(format!("Invalid namespaced URI format (missing '://'): {}", uri))
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct Relay {
 	upstreams: Arc<upstream::UpstreamGroup>,
@@ -84,6 +112,21 @@ impl Relay {
 				.ok_or(UpstreamError::InvalidRequest(
 					"invalid resource name".to_string(),
 				))
+		}
+	}
+
+	/// Parse a resource URI to extract target name and original URI
+	/// In multiplexing mode, URIs are formatted as: target://original-uri
+	/// In single-target mode, URIs are passed through unchanged
+	pub fn parse_resource_uri<'a, 'b: 'a>(
+		&'a self,
+		uri: &'b str,
+	) -> Result<(&'a str, &'b str), UpstreamError> {
+		if let Some(default) = self.default_target_name.as_ref() {
+			Ok((default.as_str(), uri))
+		} else {
+			parse_namespaced_uri(uri)
+				.map_err(|e| UpstreamError::InvalidRequest(e))
 		}
 	}
 }
@@ -189,6 +232,7 @@ impl Relay {
 	}
 	pub fn merge_resources(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
+		let default_target_name = self.default_target_name.clone();
 		Box::new(move |streams| {
 			let resources = streams
 				.into_iter()
@@ -208,8 +252,15 @@ impl Relay {
 								&cel,
 							)
 						})
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404) map this to the service name,
-						// if we add support for multiple services.
+						// Apply URI namespacing for multiplexing mode
+						.map(|mut r| {
+							r.raw.uri = namespace_uri(
+								default_target_name.as_ref(),
+								server_name.as_str(),
+								&r.uri,
+							);
+							r
+						})
 						.collect_vec()
 				})
 				.collect_vec();
@@ -224,6 +275,7 @@ impl Relay {
 	}
 	pub fn merge_resource_templates(&self, cel: Arc<ContextBuilder>) -> Box<MergeFn> {
 		let policies = self.policies.clone();
+		let default_target_name = self.default_target_name.clone();
 		Box::new(move |streams| {
 			let resource_templates = streams
 				.into_iter()
@@ -243,8 +295,15 @@ impl Relay {
 								&cel,
 							)
 						})
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404) map this to the service name,
-						// if we add support for multiple services.
+						// Apply URI namespacing for multiplexing mode
+						.map(|mut rt| {
+							rt.raw.uri_template = namespace_uri(
+								default_target_name.as_ref(),
+								server_name.as_str(),
+								&rt.uri_template,
+							);
+							rt
+						})
 						.collect_vec()
 				})
 				.collect_vec();

@@ -116,6 +116,71 @@ async fn stream_to_multiplex() {
 }
 
 #[tokio::test]
+async fn resources_multiplex() {
+	let mock_stream = mock_streamable_http_server(true).await;
+	let mock_sse = mock_sse_server().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![
+				("sse", mock_sse.addr, true),
+				("mcp", mock_stream.addr, false),
+			],
+			true,
+		)
+		.with_bind(simple_bind(basic_named_route(strng::new("mcp"))));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+	let client = mcp_streamable_client(io).await;
+	
+	// Test list_resources - should return resources from both targets
+	let resources = client.list_resources(None).await.unwrap();
+	let resource_uris = resources
+		.resources
+		.into_iter()
+		.map(|r| r.uri.to_string())
+		.sorted()
+		.collect_vec();
+	
+	// Should have resources from both targets, namespaced with target name
+	assert_eq!(resource_uris.len(), 4); // 2 resources from each target
+	assert!(resource_uris[0].starts_with("mcp://") || resource_uris[0].starts_with("sse://"));
+	assert!(resource_uris.iter().any(|uri| uri.starts_with("mcp://str:////Users/to/some/path/")));
+	assert!(resource_uris.iter().any(|uri| uri.starts_with("mcp://memo://insights")));
+	assert!(resource_uris.iter().any(|uri| uri.starts_with("sse://str:////Users/to/some/path/")));
+	assert!(resource_uris.iter().any(|uri| uri.starts_with("sse://memo://insights")));
+	
+	// Test read_resource with namespaced URI
+	let read_result = client
+		.read_resource(rmcp::model::ReadResourceRequestParam {
+			uri: "mcp://str:////Users/to/some/path/".to_string(),
+		})
+		.await
+		.unwrap();
+	assert_eq!(read_result.contents.len(), 1);
+	// ResourceContents is an enum with TextResourceContents variant
+	if let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read_result.contents[0] {
+		assert_eq!(text, "/Users/to/some/path/");
+	} else {
+		panic!("Expected TextResourceContents variant");
+	}
+	
+	// Test read_resource with the other target
+	let read_result = client
+		.read_resource(rmcp::model::ReadResourceRequestParam {
+			uri: "sse://memo://insights".to_string(),
+		})
+		.await
+		.unwrap();
+	assert_eq!(read_result.contents.len(), 1);
+	if let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read_result.contents[0] {
+		assert!(text.contains("Business Intelligence Memo"));
+	} else {
+		panic!("Expected TextResourceContents variant");
+	}
+}
+
+#[tokio::test]
 async fn stateless_to_stateful() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, false, false).await;
@@ -152,6 +217,33 @@ async fn standard_assertions(client: RunningService<RoleClient, InitializeReques
 		&ctr.content[0].raw.as_text().unwrap().text,
 		r#"{"hi":"world"}"#
 	);
+	
+	// Test resources in single-target mode (URIs should not be namespaced)
+	let resources = client.list_resources(None).await.unwrap();
+	assert_eq!(resources.resources.len(), 2);
+	let resource_uris = resources
+		.resources
+		.into_iter()
+		.map(|r| r.uri.to_string())
+		.sorted()
+		.collect_vec();
+	// In single-target mode, URIs should not have target prefix
+	assert_eq!(resource_uris[0], "memo://insights");
+	assert_eq!(resource_uris[1], "str:////Users/to/some/path/");
+	
+	// Test read_resource in single-target mode
+	let read_result = client
+		.read_resource(rmcp::model::ReadResourceRequestParam {
+			uri: "str:////Users/to/some/path/".to_string(),
+		})
+		.await
+		.unwrap();
+	assert_eq!(read_result.contents.len(), 1);
+	if let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read_result.contents[0] {
+		assert_eq!(text, "/Users/to/some/path/");
+	} else {
+		panic!("Expected TextResourceContents variant");
+	}
 }
 
 async fn setup_proxy(
