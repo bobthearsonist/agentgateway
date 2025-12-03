@@ -158,10 +158,12 @@ async fn resources_multiplex() {
 		.await
 		.unwrap();
 	assert_eq!(read_result.contents.len(), 1);
-	assert_eq!(
-		read_result.contents[0].raw.as_text().unwrap().text,
-		"/Users/to/some/path/"
-	);
+	// ResourceContents is an enum with TextResourceContents variant
+	if let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read_result.contents[0] {
+		assert_eq!(text, "/Users/to/some/path/");
+	} else {
+		panic!("Expected TextResourceContents variant");
+	}
 	
 	// Test read_resource with the other target
 	let read_result = client
@@ -171,12 +173,11 @@ async fn resources_multiplex() {
 		.await
 		.unwrap();
 	assert_eq!(read_result.contents.len(), 1);
-	assert!(read_result.contents[0]
-		.raw
-		.as_text()
-		.unwrap()
-		.text
-		.contains("Business Intelligence Memo"));
+	if let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read_result.contents[0] {
+		assert!(text.contains("Business Intelligence Memo"));
+	} else {
+		panic!("Expected TextResourceContents variant");
+	}
 }
 
 #[tokio::test]
@@ -238,10 +239,11 @@ async fn standard_assertions(client: RunningService<RoleClient, InitializeReques
 		.await
 		.unwrap();
 	assert_eq!(read_result.contents.len(), 1);
-	assert_eq!(
-		read_result.contents[0].raw.as_text().unwrap().text,
-		"/Users/to/some/path/"
-	);
+	if let rmcp::model::ResourceContents::TextResourceContents { text, .. } = &read_result.contents[0] {
+		assert_eq!(text, "/Users/to/some/path/");
+	} else {
+		panic!("Expected TextResourceContents variant");
+	}
 }
 
 async fn setup_proxy(

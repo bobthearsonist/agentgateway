@@ -253,13 +253,13 @@ impl Relay {
 							)
 						})
 						// Apply URI namespacing for multiplexing mode
-						.map(|r| rmcp::model::Resource {
-							uri: Cow::Owned(namespace_uri(
+						.map(|mut r| {
+							r.raw.uri = namespace_uri(
 								default_target_name.as_ref(),
 								server_name.as_str(),
 								&r.uri,
-							)),
-							..r
+							);
+							r
 						})
 						.collect_vec()
 				})
@@ -296,13 +296,13 @@ impl Relay {
 							)
 						})
 						// Apply URI namespacing for multiplexing mode
-						.map(|rt| rmcp::model::ResourceTemplate {
-							uri_template: namespace_uri(
+						.map(|mut rt| {
+							rt.raw.uri_template = namespace_uri(
 								default_target_name.as_ref(),
 								server_name.as_str(),
 								&rt.uri_template,
-							),
-							..rt
+							);
+							rt
 						})
 						.collect_vec()
 				})
