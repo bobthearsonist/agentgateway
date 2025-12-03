@@ -339,6 +339,15 @@ impl Session {
 							l.resource_name = Some(original_uri.to_string());
 							l.resource = Some(MCPOperation::Resource);
 						});
+						if !self.relay.policies.validate(
+							&rbac::ResourceType::Resource(rbac::ResourceId::new(
+								service_name.to_string(),
+								original_uri.to_string(),
+							)),
+							cel.as_ref(),
+						) {
+							return Err(UpstreamError::Authorization);
+						}
 						// Replace the URI with the original (non-namespaced) version
 						ur.params.uri = original_uri.to_string();
 						self.relay.send_single(r, ctx, service_name).await
