@@ -31,6 +31,8 @@ use crate::types::proto::agent::{
 use crate::types::{agent, frontend};
 use crate::*;
 
+const MCP_MULTIPLEX_DOCS_URL: &str = "https://agentgateway.dev/docs/mcp/connect/multiplex/";
+
 #[derive(Debug)]
 pub struct Store {
 	/// Allows for lookup of services by network address, the service's xds secondary key.
@@ -1105,6 +1107,26 @@ impl StoreUpdater {
 			next_state.binds.insert(b.key.clone());
 			s.insert_bind(b);
 		}
+
+		// Check for multiple MCP backends with the same name
+		let mut mcp_backend_names: HashMap<BackendName, usize> = HashMap::new();
+		for b in backends.iter() {
+			if let Backend::MCP(_, _) = &b.backend {
+				let name = b.backend.name();
+				let count = mcp_backend_names.entry(name.clone()).or_insert(0);
+				*count += 1;
+				if *count == 2 {
+					// Emit warning on second occurrence to avoid duplicate warnings
+					tracing::warn!(
+						backend_name = %name,
+						"Multiple `mcp` backend blocks detected with the same name. Only the last block will be used. \
+						Consider consolidating all MCP targets into a single backend block. \
+						See: {}", MCP_MULTIPLEX_DOCS_URL
+					);
+				}
+			}
+		}
+
 		for b in backends {
 			old_backends.remove(&b.backend.name());
 			next_state.backends.insert(b.backend.name());
