@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agentgateway — Tools</title>
+<style>
+  :root {
+    --bg: #09090b;
+    --card: #18181b;
+    --card-hover: #1f1f23;
+    --border: #27272a;
+    --text: #fafafa;
+    --text-muted: #a1a1aa;
+    --text-dim: #71717a;
+    --primary: #3b82f6;
+    --primary-dim: #1e3a5f;
+    --green: #22c55e;
+    --green-dim: #14532d;
+    --red: #ef4444;
+    --red-dim: #7f1d1d;
+    --orange: #f97316;
+    --yellow: #eab308;
+    --purple: #a855f7;
+    --sidebar-bg: #0f0f12;
+    --switch-off: #3f3f46;
+    --switch-on: #3b82f6;
+    --switch-knob: #fff;
+    --badge-bg: #27272a;
+    --toast-bg: #18181b;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    width: 240px;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-logo {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+  .sidebar-logo h2 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-logo span { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+  .sidebar-section {
+    padding: 12px 12px 4px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    font-weight: 500;
+  }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    margin: 1px 8px;
+    border-radius: 6px;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .sidebar-item:hover { background: var(--card); color: var(--text); }
+  .sidebar-item.active {
+    background: var(--card);
+    color: var(--text);
+    font-weight: 500;
+  }
+  .sidebar-item .badge {
+    margin-left: auto;
+    background: var(--badge-bg);
+    color: var(--text-muted);
+    font-size: 11px;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+  .sidebar-item svg { width: 18px; height: 18px; opacity: 0.7; }
+  .sidebar-item.active svg { opacity: 1; }
+
+  /* Main content */
+  .main {
+    flex: 1;
+    padding: 32px 40px;
+    overflow-y: auto;
+    max-width: 1100px;
+  }
+  .page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .page-header-left { display: flex; align-items: center; gap: 12px; }
+  .page-header h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+  .page-header p { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+  .page-header-icon {
+    width: 32px; height: 32px; color: var(--orange);
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .stat-item { display: flex; align-items: center; gap: 6px; }
+  .stat-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* Search and filter bar */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .search-input {
+    flex: 1;
+    max-width: 320px;
+    padding: 8px 12px 8px 36px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+    position: relative;
+  }
+  .search-input:focus { border-color: var(--primary); }
+  .search-wrapper {
+    position: relative;
+    flex: 1;
+    max-width: 320px;
+  }
+  .search-wrapper svg {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    color: var(--text-dim);
+    pointer-events: none;
+  }
+  .search-wrapper .search-input { width: 100%; }
+
+  .filter-btn {
+    padding: 8px 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .filter-btn:hover { background: var(--card-hover); color: var(--text); }
+  .filter-btn.active { border-color: var(--primary); color: var(--primary); }
+
+  /* Target cards */
+  .target-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+  }
+  .target-card:hover { border-color: #3f3f46; }
+  .target-card.disabled { opacity: 0.6; }
+  .target-header {
+    display: flex;
+    align-items: center;
+    padding: 16px 20px;
+    cursor: pointer;
+    user-select: none;
+    gap: 12px;
+  }
+  .target-chevron {
+    width: 16px; height: 16px;
+    color: var(--text-dim);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+  }
+  .target-card.expanded .target-chevron { transform: rotate(90deg); }
+  .target-name {
+    font-size: 15px;
+    font-weight: 600;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .target-name .protocol-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: var(--badge-bg);
+    color: var(--text-dim);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .target-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .tool-count {
+    background: var(--badge-bg);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+  .status-dot.off { background: var(--red); }
+
+  /* Switch */
+  .switch {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    border-radius: 10px;
+    background: var(--switch-off);
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .switch.on { background: var(--switch-on); }
+  .switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--switch-knob);
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .switch.on::after { transform: translateX(16px); }
+
+  /* Tool list */
+  .tool-list {
+    border-top: 1px solid var(--border);
+    padding: 4px 0;
+    display: none;
+  }
+  .target-card.expanded .tool-list { display: block; }
+  .tool-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 20px 10px 48px;
+    gap: 12px;
+    transition: background 0.1s;
+  }
+  .tool-row:hover { background: rgba(255,255,255,0.02); }
+  .tool-info { flex: 1; min-width: 0; }
+  .tool-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .tool-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .tool-row.disabled .tool-name { color: var(--text-dim); }
+  .tool-row.disabled .tool-desc { color: #52525b; }
+
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--toast-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 20px;
+    font-size: 13px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s ease;
+    z-index: 100;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast svg { width: 18px; height: 18px; color: var(--green); flex-shrink: 0; }
+
+  /* Disabled state for tool rows */
+  .tool-row .switch { transform: scale(0.85); }
+
+  /* "Select all / none" controls */
+  .bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px 12px 48px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .bulk-actions span { cursor: pointer; }
+  .bulk-actions span:hover { color: var(--primary); }
+
+  /* Summary card at top */
+  .summary-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .summary-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+  }
+  .summary-card .label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+  }
+  .summary-card .value {
+    font-size: 28px;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+  .summary-card .value.green { color: var(--green); }
+  .summary-card .value.red { color: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <h2>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a7 7 0 0 1 7 7c0 5-7 11-7 11S5 14 5 9a7 7 0 0 1 7-7z"/></svg>
+      agentgateway
+      <span>v0.7.0</span>
+    </h2>
+  </div>
+  <div class="sidebar-section">Configuration</div>
+  <a class="sidebar-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+    Overview
+  </a>
+  <a class="sidebar-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="7" cy="6" r="1"/><circle cx="7" cy="18" r="1"/></svg>
+    Listeners
+    <span class="badge">1</span>
+  </a>
+  <a class="sidebar-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+    Routes
+    <span class="badge">1</span>
+  </a>
+  <a class="sidebar-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+    Backends
+    <span class="badge">8</span>
+  </a>
+  <a class="sidebar-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    Policies
+  </a>
+  <a class="sidebar-item active" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+    Tools
+    <span class="badge">56</span>
+  </a>
+  <a class="sidebar-item" href="#">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    Playground
+  </a>
+</nav>
+
+<!-- Main content -->
+<div class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-header-left">
+        <svg class="page-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        <div>
+          <h1>Tools</h1>
+          <p>Control which MCP tools are exposed to connected clients</p>
+        </div>
+      </div>
+      <div class="stats-bar">
+        <div class="stat-item"><div class="stat-dot" style="background:var(--primary)"></div> 8 targets</div>
+        <div class="stat-item"><div class="stat-dot" style="background:var(--green)"></div> <span id="enabled-count">53</span> tools enabled</div>
+        <div class="stat-item"><div class="stat-dot" style="background:var(--red)"></div> <span id="denied-count">3</span> tools denied</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+        MCP Targets
+      </div>
+      <div class="value">8</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Total Tools
+      </div>
+      <div class="value">56</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Enabled
+      </div>
+      <div class="value green" id="enabled-total">53</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Denied
+      </div>
+      <div class="value red" id="denied-total">3</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="search-wrapper">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input class="search-input" type="text" placeholder="Search tools..." oninput="filterTools(this.value)">
+    </div>
+    <button class="filter-btn" onclick="this.classList.toggle('active'); filterByStatus('all')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      All
+    </button>
+    <button class="filter-btn" onclick="filterByStatus('enabled')">Enabled</button>
+    <button class="filter-btn" onclick="filterByStatus('denied')">Denied</button>
+  </div>
+
+  <!-- Target cards container -->
+  <div id="targets-container"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+  <span id="toast-msg">Configuration updated — hot-reloaded</span>
+</div>
+
+<script>
+// Tool data matching the user's actual agentgateway config
+const targets = [
+  {
+    name: "sequential-thinking",
+    protocol: "SSE",
+    enabled: true,
+    tools: [
+      { name: "sequentialthinking", desc: "Dynamic and reflective problem-solving through structured thoughts", enabled: true }
+    ]
+  },
+  {
+    name: "memory",
+    protocol: "SSE",
+    enabled: true,
+    tools: [
+      { name: "create_entities", desc: "Create multiple new entities in the knowledge graph", enabled: true },
+      { name: "create_relations", desc: "Create multiple new relations between entities", enabled: true },
+      { name: "add_observations", desc: "Add new observations to existing entities", enabled: true },
+      { name: "delete_entities", desc: "Delete multiple entities and their associated relations", enabled: true },
+      { name: "delete_observations", desc: "Delete specific observations from entities", enabled: true },
+      { name: "delete_relations", desc: "Delete multiple relations from the knowledge graph", enabled: true },
+      { name: "read_graph", desc: "Read the entire knowledge graph", enabled: true },
+      { name: "search_nodes", desc: "Search for nodes based on a query", enabled: true },
+      { name: "open_nodes", desc: "Open specific nodes by their names", enabled: true }
+    ]
+  },
+  {
+    name: "kapture",
+    protocol: "SSE",
+    enabled: true,
+    tools: [
+      { name: "list_tabs", desc: "List all connected browser tabs", enabled: true },
+      { name: "tab_detail", desc: "Get detailed information about a specific tab", enabled: true },
+      { name: "navigate", desc: "Navigate browser tab to specified URL", enabled: true },
+      { name: "click", desc: "Click on a page element using CSS selector or XPath", enabled: true },
+      { name: "fill", desc: "Fill an input field with a value", enabled: true },
+      { name: "screenshot", desc: "Capture a screenshot of the page or element", enabled: true },
+      { name: "dom", desc: "Get outerHTML of the body or a specific element", enabled: true },
+      { name: "elements", desc: "Query all elements matching a selector", enabled: true },
+      { name: "console_logs", desc: "Get console logs from a browser tab", enabled: true },
+      { name: "keypress", desc: "Send a keypress event to the current tab", enabled: true },
+      { name: "hover", desc: "Hover over a page element", enabled: true },
+      { name: "new_tab", desc: "Opens a new browser tab", enabled: true },
+      { name: "close", desc: "Closes a browser tab", enabled: true },
+      { name: "reload", desc: "Reloads the current page", enabled: true },
+      { name: "show", desc: "Brings the browser tab to the front", enabled: true },
+    ]
+  },
+  {
+    name: "context7",
+    protocol: "MCP",
+    enabled: true,
+    tools: [
+      { name: "resolve-library-id", desc: "Resolve a package name to a Context7-compatible library ID", enabled: true },
+      { name: "query-docs", desc: "Retrieve up-to-date documentation and code examples", enabled: true }
+    ]
+  },
+  {
+    name: "playwright",
+    protocol: "SSE",
+    enabled: true,
+    tools: [
+      { name: "browser_navigate", desc: "Navigate to a URL", enabled: true },
+      { name: "browser_snapshot", desc: "Capture accessibility snapshot of the current page", enabled: true },
+      { name: "browser_click", desc: "Perform click on a web page", enabled: true },
+      { name: "browser_type", desc: "Type text into editable element", enabled: true },
+      { name: "browser_take_screenshot", desc: "Take a screenshot of the current page", enabled: true },
+      { name: "browser_tabs", desc: "List, create, close, or select a browser tab", enabled: true },
+      { name: "browser_evaluate", desc: "Evaluate JavaScript expression on page", enabled: true },
+      { name: "browser_close", desc: "Close the page", enabled: true },
+      { name: "browser_press_key", desc: "Press a key on the keyboard", enabled: true },
+      { name: "browser_wait_for", desc: "Wait for text to appear or disappear", enabled: true },
+    ]
+  },
+  {
+    name: "browser-use",
+    protocol: "SSE",
+    enabled: true,
+    tools: [
+      { name: "browser_navigate", desc: "Navigate to a URL in the browser", enabled: true },
+      { name: "browser_click", desc: "Click an element on the page by its index", enabled: true },
+      { name: "browser_type", desc: "Type text into an input field", enabled: true },
+      { name: "browser_get_state", desc: "Get the current state of the page", enabled: true },
+      { name: "browser_extract_content", desc: "Extract structured content from the page", enabled: true },
+      { name: "browser_scroll", desc: "Scroll the page", enabled: true },
+      { name: "browser_go_back", desc: "Go back to the previous page", enabled: true },
+      { name: "retry_with_browser_use_agent", desc: "Retry a task using the browser-use agent", enabled: false },
+      { name: "browser_list_sessions", desc: "List all active browser sessions", enabled: false },
+      { name: "browser_close_all", desc: "Close all active browser sessions", enabled: false },
+    ]
+  },
+  {
+    name: "hass-mcp",
+    protocol: "SSE",
+    enabled: true,
+    tools: [
+      { name: "get_version", desc: "Get the Home Assistant version", enabled: true },
+      { name: "get_entity", desc: "Get the state of a Home Assistant entity", enabled: true },
+      { name: "entity_action", desc: "Perform an action on a Home Assistant entity", enabled: true },
+      { name: "list_entities", desc: "Get a list of Home Assistant entities", enabled: true },
+      { name: "search_entities_tool", desc: "Search for entities matching a query", enabled: true },
+      { name: "domain_summary_tool", desc: "Get a summary of entities in a domain", enabled: true },
+      { name: "system_overview", desc: "Get comprehensive overview of the HA system", enabled: true },
+      { name: "call_service_tool", desc: "Call any Home Assistant service", enabled: true },
+      { name: "get_history", desc: "Get the history of an entity's state changes", enabled: true },
+      { name: "restart_ha", desc: "Restart Home Assistant", enabled: false },
+      { name: "get_error_log", desc: "Get the Home Assistant error log", enabled: true },
+      { name: "list_automations", desc: "Get a list of all automations", enabled: true },
+    ]
+  },
+  {
+    name: "photoshop",
+    protocol: "SSE",
+    enabled: true,
+    tools: [
+      { name: "get_documents", desc: "Returns information on open documents", enabled: true },
+      { name: "get_layers", desc: "Returns nested list of layer info", enabled: true },
+      { name: "create_document", desc: "Creates a new Photoshop Document", enabled: true },
+      { name: "get_document_image", desc: "Returns a jpeg of the current document", enabled: true },
+      { name: "generate_image", desc: "Uses Firefly AI to generate an image", enabled: true },
+      { name: "generative_fill", desc: "Uses Firefly AI for generative fill", enabled: true },
+      { name: "create_pixel_layer", desc: "Creates a new pixel layer", enabled: true },
+    ]
+  }
+];
+
+function render() {
+  const container = document.getElementById('targets-container');
+  container.innerHTML = '';
+
+  targets.forEach((target, ti) => {
+    const enabledTools = target.tools.filter(t => t.enabled).length;
+    const totalTools = target.tools.length;
+    const allEnabled = target.enabled && enabledTools === totalTools;
+
+    const card = document.createElement('div');
+    card.className = `target-card${target.expanded ? ' expanded' : ''}${!target.enabled ? ' disabled' : ''}`;
+    card.dataset.target = target.name;
+
+    card.innerHTML = `
+      <div class="target-header" onclick="toggleExpand(${ti})">
+        <svg class="target-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        <div class="target-name">
+          ${target.name}
+          <span class="protocol-badge">${target.protocol}</span>
+        </div>
+        <div class="target-meta">
+          <span class="tool-count">${enabledTools}/${totalTools} tools</span>
+          <div class="status-dot${target.enabled ? '' : ' off'}"></div>
+        </div>
+        <div class="switch${target.enabled ? ' on' : ''}" onclick="event.stopPropagation(); toggleTarget(${ti})"></div>
+      </div>
+      <div class="tool-list">
+        <div class="bulk-actions">
+          <span onclick="bulkToggle(${ti}, true)">Enable all</span>
+          <span style="color:var(--border)">|</span>
+          <span onclick="bulkToggle(${ti}, false)">Disable all</span>
+        </div>
+        ${target.tools.map((tool, toolIdx) => `
+          <div class="tool-row${!tool.enabled ? ' disabled' : ''}" data-tool="${tool.name}">
+            <div class="tool-info">
+              <div class="tool-name">${tool.name}</div>
+              <div class="tool-desc">${tool.desc}</div>
+            </div>
+            <div class="switch${tool.enabled ? ' on' : ''}" onclick="toggleTool(${ti}, ${toolIdx})"></div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    container.appendChild(card);
+  });
+
+  updateCounts();
+}
+
+function toggleExpand(ti) {
+  targets[ti].expanded = !targets[ti].expanded;
+  render();
+}
+
+function toggleTarget(ti) {
+  targets[ti].enabled = !targets[ti].enabled;
+  if (!targets[ti].enabled) {
+    targets[ti].tools.forEach(t => t.enabled = false);
+  } else {
+    targets[ti].tools.forEach(t => t.enabled = true);
+  }
+  render();
+  showToast(`${targets[ti].name} ${targets[ti].enabled ? 'enabled' : 'disabled'} — config hot-reloaded`);
+}
+
+function toggleTool(ti, toolIdx) {
+  targets[ti].tools[toolIdx].enabled = !targets[ti].tools[toolIdx].enabled;
+  // If all tools disabled, disable target
+  const anyEnabled = targets[ti].tools.some(t => t.enabled);
+  targets[ti].enabled = anyEnabled;
+  render();
+  const tool = targets[ti].tools[toolIdx];
+  showToast(`${targets[ti].name}.${tool.name} ${tool.enabled ? 'enabled' : 'denied'} — config hot-reloaded`);
+}
+
+function bulkToggle(ti, state) {
+  targets[ti].tools.forEach(t => t.enabled = state);
+  targets[ti].enabled = state;
+  targets[ti].expanded = true;
+  render();
+  showToast(`All ${targets[ti].name} tools ${state ? 'enabled' : 'disabled'} — config hot-reloaded`);
+}
+
+function updateCounts() {
+  let enabled = 0, denied = 0;
+  targets.forEach(t => t.tools.forEach(tool => {
+    if (tool.enabled) enabled++; else denied++;
+  }));
+  document.getElementById('enabled-count').textContent = enabled;
+  document.getElementById('denied-count').textContent = denied;
+  document.getElementById('enabled-total').textContent = enabled;
+  document.getElementById('denied-total').textContent = denied;
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  toast.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => toast.classList.remove('show'), 2500);
+}
+
+function filterTools(query) {
+  query = query.toLowerCase();
+  document.querySelectorAll('.target-card').forEach(card => {
+    const targetName = card.dataset.target.toLowerCase();
+    const tools = card.querySelectorAll('.tool-row');
+    let anyMatch = targetName.includes(query);
+    tools.forEach(row => {
+      const toolName = row.dataset.tool.toLowerCase();
+      const match = toolName.includes(query) || targetName.includes(query);
+      row.style.display = match ? '' : 'none';
+      if (match) anyMatch = true;
+    });
+    card.style.display = anyMatch ? '' : 'none';
+    if (query && anyMatch && !card.classList.contains('expanded')) {
+      card.classList.add('expanded');
+    }
+  });
+}
+
+function filterByStatus(status) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.querySelectorAll('.target-card').forEach(card => {
+    card.style.display = '';
+    card.querySelectorAll('.tool-row').forEach(row => {
+      if (status === 'all') { row.style.display = ''; return; }
+      const isEnabled = !row.classList.contains('disabled');
+      row.style.display = (status === 'enabled' && isEnabled) || (status === 'denied' && !isEnabled) ? '' : 'none';
+    });
+  });
+}
+
+// Initial render
+render();
+// Expand browser-use and hass-mcp to show some disabled tools
+targets[5].expanded = true;
+targets[6].expanded = true;
+render();
+</script>
+</body>
+</html>
